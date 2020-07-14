@@ -5,8 +5,6 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -103,7 +101,29 @@ class ArrowWriter(object):
     def write_on_file(self):
         """ Write stored examples
         """
-        if self.current_rows:
+        ext_cols = set(map(lambda x: x.name, (filter(
+            lambda x: isinstance(x.type, pa.PyExtensionType),
+            self._type
+        ))))
+        # pyarrow.lib.ArrowNotImplementedError: Sequence converter
+        # for type extension<arrow.py_extension_type> not implemented
+        # so, we must sequence them ourselves
+        if ext_cols and self.current_rows:
+            entries = []
+            for row in self.current_rows:
+                row_list = list(
+                    map(lambda x: pa.array([row[x]], self._type[x].type)
+                        if x not in ext_cols else row[x], self._sorted_names))
+                row = pa.RecordBatch.from_arrays(row_list, schema=self.schema)
+                row = pa.Table.from_batches([row])
+                entries.append(row)
+            entries = pa.concat_tables(entries)
+            # selecing the first row and column "image" and casting to numpy"
+            # we can implement mehtods for "to torch or others "
+            # print(entries.slice(0,1).column("image").chunk(0).to_numpy())
+            for b in entries.to_batches():
+                self.pa_writer.write_batch(b)
+        if self.current_rows and not ext_cols:
             pa_array = pa.array(self.current_rows, type=self._type)
             first_example = pa.array(self.current_rows[0:1], type=self._type)[0]
             # Sanity check
