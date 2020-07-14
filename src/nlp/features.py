@@ -18,12 +18,10 @@
 import logging
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
-
+import numpy
 import pyarrow as pa
 
 from . import utils
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -93,6 +91,101 @@ class Tensor:
 
     def __call__(self):
         return self.pa_type
+
+
+# 2D main class and helper classes
+@dataclass
+class Array2D(pa.PyExtensionType):
+
+    dims: int = 2
+
+    def __init__(self, dtype):
+        self.inner_type = dtype
+        self.storage_type_name = Array2D._generate_dtype(
+            self.dims, self.inner_type)
+        pa.PyExtensionType.__init__(self, self.storage_type_name)
+
+    def __reduce__(self):
+        return Array2D, (self.inner_type,)
+
+    def __arrow_ext_class__(self):
+        return ExtensionArray2D
+
+    def __call__(self):
+        return self
+
+    @staticmethod
+    def _generate_dtype(ndims, dtype, current_dim=0):
+        if current_dim == ndims:
+            return dtype
+        elif current_dim == 0:
+            dtype = pa.list_(string_to_arrow(dtype), -1)
+        elif current_dim < ndims:
+            dtype = pa.list_(dtype)
+        current_dim += 1
+        return Array2D._generate_dtype(ndims, dtype, current_dim)
+
+    @staticmethod
+    def _generate_flatten(ndims, storage, current_dim=0):
+        if current_dim == ndims:
+            return storage.to_numpy()
+        elif current_dim < ndims:
+            storage = storage.flatten()
+        current_dim += 1
+        return Array2D._generate_flatten(ndims, storage, current_dim)
+
+    @property
+    def _get_arrow_ext_name(self):
+        return ExtensionArray2D._get_class().__name__
+
+    def encode_example(self, value):
+        if isinstance(value, numpy.ndarray):
+            value = value[numpy.newaxis, ...]
+            value = value.tolist()
+        elif isinstance(value, list):
+            value = [value]
+        encoded = pa.ExtensionArray.from_storage(
+            self,
+            pa.array(value, self.storage_type_name))
+        return encoded
+
+
+class ExtensionArray2D(pa.ExtensionArray):
+
+    dims: int = 2
+
+    # use these methods if dataset class insead returns this type of data
+    def to_numpy(self):
+        numpy_arr = Array2D._generate_flatten(self.dims, self.storage)
+        numpy_arr = numpy_arr.reshape(self._construct_shape)
+        return numpy_arr
+
+    @staticmethod
+    def _construct_shape(expr, ndims=2, cur_dim=0, shape=[], prev_channels=1):
+        if cur_dim == 0:
+            pass
+        elif cur_dim < ndims:
+            expr = expr.flatten()
+        elif cur_dim == ndims:
+            del expr, cur_dim, prev_channels
+            return tuple([shape.pop(0) for x in range(ndims)])
+        cur_channels = expr.offsets[-1].as_py() // prev_channels
+        shape.append(cur_channels)
+        prev_channels = cur_channels
+        cur_dim += 1
+        return ExtensionArray2D._construct_shape(expr, ndims, cur_dim, shape, prev_channels)
+
+    @property
+    def shape(self):
+        return ExtensionArray2D._construct_shape(self.storage)
+
+    @classmethod
+    def _get_class(cls):
+        return cls
+
+    def __repr__(self):
+        return f'{ExtensionArray2D._get_class().__name__}:'\
+            f'{self._construct_shape(self.storage)}'
 
 
 @dataclass
@@ -405,12 +498,10 @@ def encode_nested_example(schema, obj):
         if isinstance(obj, str):  # don't interpret a string as a list
             raise ValueError("Got a string but expected a list instead: '{}'".format(obj))
         return [encode_nested_example(schema.feature, o) for o in obj]
-
     # Object with special encoding:
     # ClassLabel will convert from string to int, TranslationVariableLanguages does some checks
-    elif isinstance(schema, (ClassLabel, TranslationVariableLanguages, Value)):
+    elif isinstance(schema, (ClassLabel, TranslationVariableLanguages, Value, Array2D)):
         return schema.encode_example(obj)
-
     # Other object should be directly convertible to a native Arrow type (like Translation and Translation)
     return obj
 

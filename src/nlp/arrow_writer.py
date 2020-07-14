@@ -18,7 +18,6 @@ import logging
 import os
 import socket
 from typing import Any, Dict, List, Optional
-
 import pyarrow as pa
 
 from .utils.file_utils import HF_DATASETS_CACHE, hash_url_to_filename
@@ -49,14 +48,19 @@ class ArrowWriter(object):
             raise ValueError("At least one of path and stream must be provided.")
 
         if data_type is not None:
-            self._type: pa.DataType = data_type
-            self._schema: pa.Schema = pa.schema(field for field in self._type)
+            sorted_names, sorted_fields = self._sort_fields(data_type)
+            self._type: pa.DataType = pa.struct(sorted_fields)
+            self._schema: pa.Schema = pa.schema(sorted_fields)
+            self._sorted_names = sorted_names
         elif schema is not None:
-            self._schema: pa.Schema = schema
-            self._type: pa.DataType = pa.struct(field for field in self._schema)
+            sorted_names, sorted_fields = self._sort_fields(schema)
+            self._schema: pa.Schema = pa.schema(sorted_fields)
+            self._type: pa.DataType = pa.struct(sorted_fields)
+            self._sorted_names = sorted_names
         else:
             self._schema = None
             self._type = None
+            self._sorted_names = None
 
         if disable_nullable and self._schema is not None:
             self._schema = pa.schema(pa.field(field.name, field.type, nullable=False) for field in self._type)
@@ -97,6 +101,11 @@ class ArrowWriter(object):
         pa_batch = pa.RecordBatch.from_struct_array(pa_array)
         self._num_bytes += pa_array.nbytes
         self.pa_writer.write_batch(pa_batch)
+
+    def _sort_fields(self, datatype):
+        sorted_fields = sorted(datatype, key=lambda x: x.name)
+        sorted_names = [x.name for x in sorted_fields]
+        return sorted_names, sorted_fields
 
     def write_on_file(self):
         """ Write stored examples
