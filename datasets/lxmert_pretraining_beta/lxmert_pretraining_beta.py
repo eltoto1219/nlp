@@ -45,7 +45,7 @@ _LXMERT_FEATURES = nlp.Features(
         "boxes": nlp.features.Array2D(dtype="int32"),
         "img_h": nlp.Value("int32"),
         "img_w": nlp.Value("int32"),
-        "labels": nlp.features.Array2D(dtype="int32"),
+        "labels": nlp.features.Array2D(dtype="string"),
         "labels_confidence": nlp.features.Array2D(dtype="float32"),
         "num_boxes": nlp.Value("int32"),
         "attrs_id": nlp.features.Sequence(nlp.ClassLabel(num_classes=400)),
