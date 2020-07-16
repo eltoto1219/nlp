@@ -5,21 +5,21 @@ from nlp.arrow_writer import ArrowWriter
 
 my_features = {
     "text": features.Array2D(dtype="float32"),
-    # "image": features.Array2D(dtype="float32"),
+    "image": features.Array2D(dtype="float32"),
     "source": nlp.Value("string")
 }
 
 
 dict_example_0 = {
-    # "image": np.random.rand(5, 5).astype("float32"),
-    "source": "1",
+    "image": np.random.rand(5, 5).astype("float32"),
+    "source": "foo",
     "text": np.random.rand(36, 2048).astype("float32"),
 }
 
 dict_example_1 = {
-    # "image": np.random.rand(5, 5).astype("float32"),
+    "image": np.random.rand(5, 5).astype("float32"),
     "text": np.random.rand(36, 2048).astype("float32"),
-    "source": "2"
+    "source": "baz"
 }
 
 my_features = nlp.Features(my_features)
@@ -31,7 +31,7 @@ for key, record in my_examples:
 num_examples, num_bytes = writer.finalize()
 dataset = nlp.Dataset.from_file("/tmp/arrow_data.arrow")
 
-print(dir(writer))
+print(dataset)
 # throws an error
 # print(dataset[0])
 # this works

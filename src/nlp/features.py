@@ -107,7 +107,7 @@ class Array2D(pa.PyExtensionType):
     def __init__(self, dtype):
         self.inner_type = dtype
         self.storage_type_name = Array2D._generate_dtype(
-            self.dims, self.inner_type)
+            self.inner_type, self.dims)
         pa.PyExtensionType.__init__(self, self.storage_type_name)
 
     def __reduce__(self):
@@ -120,24 +120,20 @@ class Array2D(pa.PyExtensionType):
         return self
 
     @staticmethod
-    def _generate_dtype(ndims, dtype, current_dim=0):
-        if current_dim == ndims:
-            return dtype
-        elif current_dim == 0:
-            dtype = pa.list_(string_to_arrow(dtype), -1)
-        elif current_dim < ndims:
-            dtype = pa.list_(dtype)
-        current_dim += 1
-        return Array2D._generate_dtype(ndims, dtype, current_dim)
+    def _generate_dtype(dtype, ndims=2):
+        dtype = string_to_arrow(dtype)
+        for i in range(ndims):
+            if i == 0:
+                dtype = pa.list_(dtype, -1)
+            else:
+                dtype = pa.list_(dtype)
+        return dtype
 
     @staticmethod
-    def _generate_flatten(ndims, storage, current_dim=0):
-        if current_dim == ndims:
-            return storage.to_numpy()
-        elif current_dim < ndims:
+    def _generate_flatten(storage, ndims=2):
+        for i in range(ndims):
             storage = storage.flatten()
-        current_dim += 1
-        return Array2D._generate_flatten(ndims, storage, current_dim)
+        return storage.to_numpy()
 
     @property
     def _get_arrow_ext_name(self):
@@ -159,38 +155,43 @@ class ExtensionArray2D(pa.ExtensionArray):
 
     dims: int = 2
 
-    # use these methods if dataset class insead returns this type of data
-    def to_numpy(self):
-        numpy_arr = Array2D._generate_flatten(self.dims, self.storage)
-        numpy_arr = numpy_arr.reshape(self._construct_shape)
-        return numpy_arr
+    def __repr__(self):
+        return f'{ExtensionArray2D._get_class().__name__}:'\
+            f'{self._construct_shape(self.storage)}'
+
+    def __array__(self):
+        return self.to_numpy()
+
+    def __iter__(self):
+        for i in range(self.storage.offsets[-1].as_py()):
+            yield self.to_numpy()[i].tolist()
 
     @staticmethod
-    def _construct_shape(expr, ndims=2, cur_dim=0, shape=[], prev_channels=1):
-        if cur_dim == 0:
-            pass
-        elif cur_dim < ndims:
-            expr = expr.flatten()
-        elif cur_dim == ndims:
-            del expr, cur_dim, prev_channels
-            return tuple([shape.pop(0) for x in range(ndims)])
-        cur_channels = expr.offsets[-1].as_py() // prev_channels
-        shape.append(cur_channels)
-        prev_channels = cur_channels
-        cur_dim += 1
-        return ExtensionArray2D._construct_shape(expr, ndims, cur_dim, shape, prev_channels)
-
-    @property
-    def shape(self):
-        return ExtensionArray2D._construct_shape(self.storage)
+    def _construct_shape(storage, ndims=2):
+        shape = []
+        prev_channels = 1
+        for i in range(ndims):
+            if i == 0:
+                pass
+            else:
+                storage = storage.flatten()
+            cur_channels = storage.offsets[-1].as_py() // prev_channels
+            shape.append(cur_channels)
+            prev_channels = cur_channels
+        return tuple(shape)
 
     @classmethod
     def _get_class(cls):
         return cls
 
-    def __repr__(self):
-        return f'{ExtensionArray2D._get_class().__name__}:'\
-            f'{self._construct_shape(self.storage)}'
+    @property
+    def shape(self):
+        return ExtensionArray2D._construct_shape(self.storage)
+
+    def to_numpy(self):
+        numpy_arr = Array2D._generate_flatten(self.storage, self.dims)
+        numpy_arr = numpy_arr.reshape(ExtensionArray2D._construct_shape(self.storage))
+        return numpy_arr
 
 
 @dataclass
