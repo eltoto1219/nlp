@@ -1,15 +1,19 @@
 from __future__ import absolute_import, division, print_function
-import subprocess
-import os
-import sys
-import csv
+
 import base64
-import time
+import csv
 import json
+import os
+import subprocess
+import sys
+import time
+
+import numpy as np
+
 import nlp
 import nlp.features as features
-import numpy as np
 from nlp.arrow_writer import ArrowWriter
+
 
 DOWNLOAD_MINI = False
 DOWNLOAD_TRAIN = False
@@ -17,14 +21,24 @@ DOWNLOAD_VAL = True
 
 
 csv.field_size_limit(sys.maxsize)
-FIELDNAMES = ["img_id", "img_h", "img_w", "objects_id", "objects_conf",
-              "attrs_id", "attrs_conf", "num_boxes", "boxes", "features"]
+FIELDNAMES = [
+    "img_id",
+    "img_h",
+    "img_w",
+    "objects_id",
+    "objects_conf",
+    "attrs_id",
+    "attrs_conf",
+    "num_boxes",
+    "boxes",
+    "features",
+]
 
 
 _MINI_URLS = [
     "https://nlp1.cs.unc.edu/data/lxmert_data/mscoco_imgfeat/val2014_obj36.zip",
     "https://raw.githubusercontent.com/airsplay/lxmert/master/data/lxmert/all_ans.json",
-    "https://nlp1.cs.unc.edu/data/lxmert_data/vqa/minival.json"
+    "https://nlp1.cs.unc.edu/data/lxmert_data/vqa/minival.json",
 ]
 
 _TEXT_DATA_TRAIN_URLS = [
@@ -66,17 +80,17 @@ class AnswerTable:
         "the man": "man",
         "a woman": "woman",
         "the woman": "woman",
-        'one': '1',
-        'two': '2',
-        'three': '3',
-        'four': '4',
-        'five': '5',
-        'six': '6',
-        'seven': '7',
-        'eight': '8',
-        'nine': '9',
-        'ten': '10',
-        'grey': 'gray',
+        "one": "1",
+        "two": "2",
+        "three": "3",
+        "four": "4",
+        "five": "5",
+        "six": "6",
+        "seven": "7",
+        "eight": "8",
+        "nine": "9",
+        "ten": "10",
+        "grey": "gray",
     }
 
     def __init__(self, dsets=None):
@@ -84,10 +98,9 @@ class AnswerTable:
         if dsets is not None:
             dsets = set(dsets)
             # If the answer is used in the dsets
-            self.anss = [ans['ans'] for ans in self.all_ans if
-                         len(set(ans['dsets']) & dsets) > 0]
+            self.anss = [ans["ans"] for ans in self.all_ans if len(set(ans["dsets"]) & dsets) > 0]
         else:
-            self.anss = [ans['ans'] for ans in self.all_ans]
+            self.anss = [ans["ans"] for ans in self.all_ans]
         self.ans_set = set(self.anss)
 
         self._id2ans_map = self.anss
@@ -101,7 +114,7 @@ class AnswerTable:
         if len(ans) == 0:
             return ""
         ans = ans.lower()
-        if ans[-1] == '.':
+        if ans[-1] == ".":
             ans = ans[:-1].strip()
         if ans.startswith("a "):
             ans = ans[2:].strip()
@@ -145,17 +158,17 @@ def load_obj_tsv(fname, topk=300):
         for i, item in enumerate(reader):
             img_id = item.pop("img_id")
 
-            for key in ['img_h', 'img_w', 'num_boxes']:
+            for key in ["img_h", "img_w", "num_boxes"]:
                 item[key] = int(item[key])
 
-            boxes = item['num_boxes']
+            boxes = item["num_boxes"]
             decode_config = [
-                ('objects_id', (boxes, ), np.int64),
-                ('objects_conf', (boxes, ), np.float32),
-                ('attrs_id', (boxes, ), np.int64),
-                ('attrs_conf', (boxes, ), np.float32),
-                ('boxes', (boxes, 4), np.float32),
-                ('features', (boxes, -1), np.float32),
+                ("objects_id", (boxes,), np.int64),
+                ("objects_conf", (boxes,), np.float32),
+                ("attrs_id", (boxes,), np.int64),
+                ("attrs_conf", (boxes,), np.float32),
+                ("boxes", (boxes, 4), np.float32),
+                ("features", (boxes, -1), np.float32),
             ]
             for key, shape, dtype in decode_config:
                 item[key] = np.frombuffer(base64.b64decode(item[key]), dtype=dtype)
@@ -180,34 +193,21 @@ for url in urls:
         continue
     else:
         os.mknod(fname)
-        print(f'downloading:{fname}')
+        print(f"downloading:{fname}")
 
-    command = f'wget --no-check-certificate {url} -O {fname}'
+    command = f"wget --no-check-certificate {url} -O {fname}"
     subprocess.run(
-        command,
-        shell=True,
-        stderr=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
+        command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE,
     )
 
 for fname in filter(lambda x: x[-3:] == "zip", os.listdir("/tmp/nlp/")):
     print("unzipping and removing archives...")
     command = f"unzip /tmp/nlp/{fname} -d /tmp/nlp/{fname[:-4]}"
-    process = subprocess.run(
-        command,
-        shell=True,
-        stderr=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-    )
+    process = subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE,)
 
     # remove zip
     command = f"rm /tmp/nlp/{fname}"
-    process = subprocess.run(
-        command,
-        shell=True,
-        stderr=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-    )
+    process = subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE,)
 
 
 if DOWNLOAD_MINI:
@@ -266,7 +266,7 @@ for i in items:
         new[img] = entry
     else:
         cur = new[img]
-        assert len(cur) == len(entry), f'{len(cur)}, {len(entry)}'
+        assert len(cur) == len(entry), f"{len(cur)}, {len(entry)}"
         for k in cur:
             if k not in image_data and k != "img_id":
                 temp = entry[k] + cur[k]

@@ -19,10 +19,13 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
+
 import numpy
 import pyarrow as pa
 
 from . import utils
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -106,8 +109,7 @@ class Array2D(pa.PyExtensionType):
 
     def __init__(self, dtype):
         self.inner_type = dtype
-        self.storage_type_name = Array2D._generate_dtype(
-            self.inner_type, self.dims)
+        self.storage_type_name = Array2D._generate_dtype(self.inner_type, self.dims)
         pa.PyExtensionType.__init__(self, self.storage_type_name)
 
     def __reduce__(self):
@@ -145,9 +147,7 @@ class Array2D(pa.PyExtensionType):
             value = value.tolist()
         elif isinstance(value, list):
             value = [value]
-        encoded = pa.ExtensionArray.from_storage(
-            self,
-            pa.array(value, self.storage_type_name))
+        encoded = pa.ExtensionArray.from_storage(self, pa.array(value, self.storage_type_name))
         return encoded
 
 
@@ -156,8 +156,7 @@ class ExtensionArray2D(pa.ExtensionArray):
     dims: int = 2
 
     def __repr__(self):
-        return f'{ExtensionArray2D._get_class().__name__}:'\
-            f'{self._construct_shape(self.storage)}'
+        return f"{ExtensionArray2D._get_class().__name__}:" f"{self._construct_shape(self.storage)}"
 
     def __array__(self):
         return self.to_numpy()

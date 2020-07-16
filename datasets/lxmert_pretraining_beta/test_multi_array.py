@@ -1,12 +1,14 @@
+import numpy as np
+
 import nlp
 import nlp.features as features
-import numpy as np
 from nlp.arrow_writer import ArrowWriter
+
 
 my_features = {
     "text": features.Array2D(dtype="float32"),
     "image": features.Array2D(dtype="float32"),
-    "source": nlp.Value("string")
+    "source": nlp.Value("string"),
 }
 
 
@@ -19,7 +21,7 @@ dict_example_0 = {
 dict_example_1 = {
     "image": np.random.rand(5, 5).astype("float32"),
     "text": np.random.rand(36, 2048).astype("float32"),
-    "source": "baz"
+    "source": "baz",
 }
 
 my_features = nlp.Features(my_features)
