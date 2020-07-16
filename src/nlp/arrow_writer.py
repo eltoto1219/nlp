@@ -18,8 +18,9 @@ import logging
 import os
 import socket
 from typing import Any, Dict, List, Optional
-import pyarrow as pa
+
 import numpy as np
+import pyarrow as pa
 
 from .utils.file_utils import HF_DATASETS_CACHE, hash_url_to_filename
 from .utils.py_utils import map_all_sequences_to_lists
@@ -111,10 +112,7 @@ class ArrowWriter(object):
     def write_on_file(self):
         """ Write stored examples
         """
-        ext_cols = set(map(lambda x: x.name, (filter(
-            lambda x: isinstance(x.type, pa.PyExtensionType),
-            self._type
-        ))))
+        ext_cols = set(map(lambda x: x.name, (filter(lambda x: isinstance(x.type, pa.PyExtensionType), self._type))))
         # pyarrow.lib.ArrowNotImplementedError: Sequence converter
         # for type extension<arrow.py_extension_type> not implemented
         # so, we must sequence them ourselves
@@ -122,8 +120,11 @@ class ArrowWriter(object):
             entries = []
             for row in self.current_rows:
                 row_list = list(
-                    map(lambda x: pa.array([row[x]], self._type[x].type)
-                        if x not in ext_cols else row[x], self._sorted_names))
+                    map(
+                        lambda x: pa.array([row[x]], self._type[x].type) if x not in ext_cols else row[x],
+                        self._sorted_names,
+                    )
+                )
                 row = pa.RecordBatch.from_arrays(row_list, schema=self.schema)
                 row = pa.Table.from_batches([row])
                 entries.append(row)

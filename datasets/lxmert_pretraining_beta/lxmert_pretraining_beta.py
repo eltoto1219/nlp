@@ -16,7 +16,9 @@
 # Lint as: python3
 
 from __future__ import absolute_import, division, print_function
+
 import nlp
+
 
 _DESCRIPTION = """\
 LXMERT multimodal pretraining dataset beta
@@ -36,22 +38,24 @@ _URL = "https://arxiv.org/abs/1908.07490"
 _ARROW_URL_PATH_TRAIN = None
 _ARROW_URL_PATH_VAL = None
 
-_LXMERT_FEATURES = nlp.Features({
-    "image": nlp.features.Array2D(dtype="float32"),
-    "img_id": nlp.Value("string"),
-    "boxes": nlp.features.Array2D(dtype="int32"),
-    "img_h": nlp.Value("int32"),
-    "img_w": nlp.Value("int32"),
-    "labels": nlp.features.Array2D(dtype="int32"),
-    "labels_confidence": nlp.features.Array2D(dtype="float32"),
-    "num_boxes": nlp.Value("int32"),
-    "attrs_id": nlp.features.Sequence(nlp.ClassLabel(num_classes=400)),
-    "objs_id": nlp.features.Sequence(nlp.ClassLabel(num_classes=1600)),
-    "attrs_confidence": nlp.features.Sequence(nlp.Value("float32")),
-    "objs_confidence": nlp.features.Sequence(nlp.Value("float32")),
-    "captions": nlp.features.Sequence(nlp.Value("string")),
-    "questions": nlp.features.Sequence(nlp.Value("string")),
-})
+_LXMERT_FEATURES = nlp.Features(
+    {
+        "image": nlp.features.Array2D(dtype="float32"),
+        "img_id": nlp.Value("string"),
+        "boxes": nlp.features.Array2D(dtype="int32"),
+        "img_h": nlp.Value("int32"),
+        "img_w": nlp.Value("int32"),
+        "labels": nlp.features.Array2D(dtype="int32"),
+        "labels_confidence": nlp.features.Array2D(dtype="float32"),
+        "num_boxes": nlp.Value("int32"),
+        "attrs_id": nlp.features.Sequence(nlp.ClassLabel(num_classes=400)),
+        "objs_id": nlp.features.Sequence(nlp.ClassLabel(num_classes=1600)),
+        "attrs_confidence": nlp.features.Sequence(nlp.Value("float32")),
+        "objs_confidence": nlp.features.Sequence(nlp.Value("float32")),
+        "captions": nlp.features.Sequence(nlp.Value("string")),
+        "questions": nlp.features.Sequence(nlp.Value("string")),
+    }
+)
 
 _SUPERVISED_KEYS = tuple(_LXMERT_FEATURES.keys())
 
@@ -65,7 +69,7 @@ class LxmertPretrainingBeta(nlp.GeneratorBasedBuilder):
             features=_LXMERT_FEATURES,
             homepage=_URL,
             citation=_CITATION,
-            supervised_keys=_SUPERVISED_KEYS
+            supervised_keys=_SUPERVISED_KEYS,
         )
 
     def _split_generators(self, dl_manager):
