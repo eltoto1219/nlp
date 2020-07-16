@@ -15,6 +15,8 @@ import nlp.features as features
 from nlp.arrow_writer import ArrowWriter
 
 
+ROOT = "/ssd-playpen/avmendoz/nlp"
+
 DOWNLOAD_MINI = False
 DOWNLOAD_TRAIN = False
 DOWNLOAD_VAL = True
@@ -94,7 +96,7 @@ class AnswerTable:
     }
 
     def __init__(self, dsets=None):
-        self.all_ans = json.load(open("/tmp/nlp/all_ans.json"))
+        self.all_ans = json.load(open(f"{ROOT}/all_ans.json"))
         if dsets is not None:
             dsets = set(dsets)
             # If the answer is used in the dsets
@@ -183,11 +185,11 @@ def load_obj_tsv(fname, topk=300):
     return data
 
 
-if not os.path.exists("/tmp/nlp/"):
-    os.mkdir("/tmp/nlp/")
+if not os.path.exists(f"{ROOT}/"):
+    os.mkdir(f"{ROOT}/")
 for url in urls:
     ftype = url.split("/")[-1]
-    fname = "/tmp/nlp/" + ftype
+    fname = f"{ROOT}/" + ftype
     check = fname.split(".")[0]
     if os.path.exists(fname) or os.path.exists(check):
         continue
@@ -200,82 +202,115 @@ for url in urls:
         command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE,
     )
 
-for fname in filter(lambda x: x[-3:] == "zip", os.listdir("/tmp/nlp/")):
+for fname in filter(lambda x: x[-3:] == "zip", os.listdir(f"{ROOT}/")):
     print("unzipping and removing archives...")
-    command = f"unzip /tmp/nlp/{fname} -d /tmp/nlp/{fname[:-4]}"
+    command = f"unzip {ROOT}/{fname} -d {ROOT}/{fname[:-4]}"
     process = subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE,)
 
     # remove zip
-    command = f"rm /tmp/nlp/{fname}"
+    command = f"rm {ROOT}/{fname}"
     process = subprocess.run(command, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE,)
 
 
 if DOWNLOAD_MINI:
     split = "mini"
-    with open("/tmp/nlp/minival.json", "r") as f:
+    with open(f"{ROOT}/minival.json", "r") as f:
         items = json.load(f)
-    images = load_obj_tsv("/tmp/nlp/val2014_obj36/mscoco_imgfeat/val2014_obj36.tsv", topk=300)
+    images = load_obj_tsv(f"{ROOT}/val2014_obj36/mscoco_imgfeat/val2014_obj36.tsv", topk=300)
 elif DOWNLOAD_TRAIN:
     split = "train"
-    with open("/tmp/nlp/mscoco_train.json", "r") as f:
+    with open(f"{ROOT}/mscoco_train.json", "r") as f:
         items = json.load(f)
-    with open("/tmp/nlp/vgnococo.json", "r") as f:
+    with open(f"{ROOT}/vgnococo.json", "r") as f:
         items += json.load(f)
-    images = load_obj_tsv("/tmp/nlp/train2014_obj36/mscoco_imgfeat/train2014_obj36.tsv", topk=None)
-    images = load_obj_tsv("/tmp/nlp/vg_gqa_obj36/vg_gqa_imgfeat/vg_gqa_obj36.tsv", topk=None)
+    images = load_obj_tsv(f"{ROOT}/train2014_obj36/mscoco_imgfeat/train2014_obj36.tsv", topk=None)
+    images = load_obj_tsv(f"{ROOT}/vg_gqa_obj36/vg_gqa_imgfeat/vg_gqa_obj36.tsv", topk=None)
 elif DOWNLOAD_VAL:
     split = "val"
-    with open("/tmp/nlp/mscoco_nominival.json", "r") as f:
+    with open(f"{ROOT}/mscoco_nominival.json", "r") as f:
         items = json.load(f)
-    print("hi")
-    images = load_obj_tsv("/tmp/nlp/val2014_obj36/mscoco_imgfeat/val2014_obj36.tsv", topk=None)
-    print("hello")
+    images = load_obj_tsv(f"{ROOT}/val2014_obj36/mscoco_imgfeat/val2014_obj36.tsv", topk=None)
 
 
+# print(len(set(images.keys())), next(iter(images.keys())))
+# print(len(set([i["img_id"] for i in items])),next(iter([i["img_id"] for i in items])))
+# print(len(set(images.keys()).intersection(set([i["img_id"] for i in items]))))
+# raise Exception
 answer_table = AnswerTable()
 # pre-pre process
 new = {}
-raw_labels = []
-for i in items:
+for j, i in enumerate(items):
     img = i.pop("img_id")
     image_data = images.get(img)
     entry = image_data
     if image_data is None:
         continue
-    i.pop("answer_type")
-    i.pop("question_type")
-    i.pop("question_id")
-    entry = {**entry, **i}
-    sent = entry["sent"]
-    labels = entry["label"]
-    label = list(labels.keys())
-    label_conf = list(labels.values())
-    for l in label:
-        raw_labels.append(answer_table.convert_ans(l))
-    entry["label"] = [answer_table.ans2id(answer_table.convert_ans(x)) for x in label]
-    entry["label_conf"] = label_conf
-    question = sent if "?" in sent else None
-    sent = sent if "?" not in sent else None
-    entry["question"] = question
-    entry["sent"] = sent
-    entry["img_id"] = img
-    for k in entry:
-        if k not in image_data and k != "img_id":
-            entry[k] = [entry[k]]
-    if img not in new:
-        new[img] = entry
-    else:
-        cur = new[img]
-        assert len(cur) == len(entry), f"{len(cur)}, {len(entry)}"
-        for k in cur:
+    if split == "mini":
+        i.pop("answer_type")
+        i.pop("question_type")
+        i.pop("question_id")
+        entry = {**entry, **i}
+        sent = entry["sent"]
+        labels = entry["label"]
+        label = list(labels.keys())
+        label_conf = list(labels.values())
+        label = [answer_table.convert_ans(l) for l in label]
+        entry["label"] = label
+        entry["label_conf"] = label_conf
+        question = sent if "?" in sent else None
+        sent = sent if "?" not in sent else None
+        entry["question"] = question
+        entry["sent"] = sent
+        entry["img_id"] = img
+        for k in entry:
             if k not in image_data and k != "img_id":
-                temp = entry[k] + cur[k]
-                new_v = [x for x in temp if x is not None]
-                if not new_v:
-                    new_v = ["<NONE>"]
-                cur[k] = new_v
+                entry[k] = [entry[k]]
+        if img not in new:
+            new[img] = entry
+        else:
+            cur = new[img]
+            assert len(cur) == len(entry), f"{len(cur)}, {len(entry)}"
+            for k in cur:
+                if k not in image_data and k != "img_id":
+                    temp = entry[k] + cur[k]
+                    new_v = [x for x in temp if x is not None]
+                    if not new_v:
+                        new_v = ["<NONE>"]
+                    cur[k] = new_v
 
-        new[img] = cur
+            new[img] = cur
+    else:
+        sents = i["sentf"]
+        labels = i["labelf"]
+        labelk = sorted(list(labels.keys()))
+        sentsk = sorted(list(sents.keys()))
+        questionsf = []
+        labelsf = []
+        labelscf = []
+        sentsf = []
+        for k in labelk:
+            for v in labels[k]:
+                if "gqa" in k or "vqa" in k or "visual7w" in k:
+                    labelsf.append(list(map(lambda x: answer_table.convert_ans(x), v.keys())))
+                    labelscf.append(list(map(lambda x: x, v.values())))
+        for k in sentsk:
+            if "gqa" in k or "vqa" in k or "visual7w" in k:
+                for s in sents[k]:
+                    questionsf.append(s)
+            else:
+                for s in sents[k]:
+                    sentsf.append(s)
+
+        questions = questionsf
+        sents = sentsf
+        labels = labelsf
+        assert len(questions) == len(labels), print(questions[-1], labels[-1], len(questions), len(labels))
+        entry["question"] = questions if questions else ["<NONE>"]
+        entry["sent"] = sents if sents else ["<NONE>"]
+        entry["img_id"] = img
+        entry["label"] = labels if labels else ["<NONE>"]
+        entry["label_conf"] = labelscf if labelscf else ["<NONE>"]
+        new[img] = entry
 
 new = list(new.values())
 
@@ -289,10 +324,10 @@ labels that need to be converted to pyarrow features
 my_features = {
     "image": features.Array2D(dtype="float32"),
     "img_id": nlp.Value("string"),
-    "boxes": nlp.features.Array2D(dtype="int32"),
+    "boxes": features.Array2D(dtype="int32"),
     "img_h": nlp.Value("int32"),
     "img_w": nlp.Value("int32"),
-    "labels": nlp.features.Array2D(dtype="int32"),
+    "labels": nlp.features.Array2D(dtype="string"),
     "labels_confidence": nlp.features.Array2D(dtype="float32"),
     "num_boxes": nlp.Value("int32"),
     "attrs_id": nlp.features.Sequence(nlp.ClassLabel(num_classes=400)),
@@ -328,10 +363,9 @@ for i in range(len(new)):
 
 
 my_features = nlp.Features(my_features)
-writer = ArrowWriter(data_type=my_features.type, path=f"/tmp/nlp/{split}.arrow")
+writer = ArrowWriter(data_type=my_features.type, path=f"{ROOT}/{split}.arrow")
 for key, record in my_examples:
     example = my_features.encode_example(record)
     writer.write(example)
 num_examples, num_bytes = writer.finalize()
-dataset = nlp.Dataset.from_file(f"/tmp/nlp/{split}.arrow")
-print(dataset.num_rows)
+dataset = nlp.Dataset.from_file(f"{ROOT}/{split}.arrow")

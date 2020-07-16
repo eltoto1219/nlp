@@ -112,27 +112,21 @@ class ArrowWriter(object):
     def write_on_file(self):
         """ Write stored examples
         """
-        ext_cols = set(map(lambda x: x.name, (filter(lambda x: isinstance(x.type, pa.PyExtensionType), self._type))))
-        # pyarrow.lib.ArrowNotImplementedError: Sequence converter
-        # for type extension<arrow.py_extension_type> not implemented
-        # so, we must sequence them ourselves
+        ext_cols = set(x.name for x in self._type if isinstance(x.type, pa.PyExtensionType))
         if ext_cols and self.current_rows:
             entries = []
             for row in self.current_rows:
-                row_list = list(
-                    map(
-                        lambda x: pa.array([row[x]], self._type[x].type) if x not in ext_cols else row[x],
-                        self._sorted_names,
-                    )
-                )
+                row_list = [
+                    pa.array([row[x]], self._type[x].type) if x not in ext_cols else row[x] for x in self._sorted_names
+                ]
                 row = pa.RecordBatch.from_arrays(row_list, schema=self.schema)
                 row = pa.Table.from_batches([row])
                 entries.append(row)
             entries = pa.concat_tables(entries)
-            # selecing the first row and column "image" and casting to numpy"
-            # we can implement mehtods for "to torch or others "
+            self._num_bytes += entries.nbytes
+            # convert entry to list, ex. below:
             # list(entries.slice(0, 1).column("image").chunk(0))
-            for b in entries.to_batches():
+            for b in entries.to_batches(self.writer_batch_size):
                 self.pa_writer.write_batch(b)
 
         if self.current_rows and not ext_cols:
