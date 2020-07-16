@@ -6,25 +6,58 @@ import csv
 import base64
 import time
 import json
-from tqdm import tqdm
-
 import nlp
 import nlp.features as features
 import numpy as np
 from nlp.arrow_writer import ArrowWriter
+
+DOWNLOAD_MINI = False
+DOWNLOAD_TRAIN = False
+DOWNLOAD_VAL = True
 
 
 csv.field_size_limit(sys.maxsize)
 FIELDNAMES = ["img_id", "img_h", "img_w", "objects_id", "objects_conf",
               "attrs_id", "attrs_conf", "num_boxes", "boxes", "features"]
 
-# I will only do for minival for now for testing purposes
-# download the following links manually and place intp the playground dir
-_DL_URLS = {
-    # "val_img": "https://nlp1.cs.unc.edu/data/lxmert_data/mscoco_imgfeat/val2014_obj36.zip",
-    "all_ans": "https://raw.githubusercontent.com/airsplay/lxmert/master/data/lxmert/all_ans.json",
-    "minival": "https://nlp1.cs.unc.edu/data/lxmert_data/vqa/minival.json"
-}
+
+_MINI_URLS = [
+    "https://nlp1.cs.unc.edu/data/lxmert_data/mscoco_imgfeat/val2014_obj36.zip",
+    "https://raw.githubusercontent.com/airsplay/lxmert/master/data/lxmert/all_ans.json",
+    "https://nlp1.cs.unc.edu/data/lxmert_data/vqa/minival.json"
+]
+
+_TEXT_DATA_TRAIN_URLS = [
+    "https://nlp1.cs.unc.edu/data/lxmert_data/lxmert/mscoco_train.json",
+    "https://nlp1.cs.unc.edu/data/lxmert_data/lxmert/vgnococo.json",
+    "https://raw.githubusercontent.com/airsplay/lxmert/master/data/lxmert/all_ans.json",
+]
+
+
+_TEXT_DATA_VAL_URLS = [
+    "https://nlp1.cs.unc.edu/data/lxmert_data/lxmert/mscoco_nominival.json",
+    # "https://nlp1.cs.unc.edu/data/lxmert_data/lxmert/mscoco_minival.json",
+    "https://raw.githubusercontent.com/airsplay/lxmert/master/data/lxmert/all_ans.json",
+]
+
+
+_IMG_DATA_TRAIN_URLS = [
+    "https://nlp1.cs.unc.edu/data/lxmert_data/mscoco_imgfeat/train2014_obj36.zip",
+    "https://nlp1.cs.unc.edu/data/lxmert_data/vg_gqa_imgfeat/vg_gqa_obj36.zip",
+]
+
+_IMG_DATA_VAL_URLS = [
+    "https://nlp1.cs.unc.edu/data/lxmert_data/mscoco_imgfeat/val2014_obj36.zip",
+]
+
+if DOWNLOAD_VAL:
+    urls = _IMG_DATA_VAL_URLS + _TEXT_DATA_VAL_URLS
+elif DOWNLOAD_TRAIN:
+    urls = _IMG_DATA_TRAIN_URLS + _TEXT_DATA_TRAIN_URLS
+elif DOWNLOAD_MINI:
+    urls = _MINI_URLS
+else:
+    exit()
 
 
 class AnswerTable:
@@ -47,7 +80,7 @@ class AnswerTable:
     }
 
     def __init__(self, dsets=None):
-        self.all_ans = json.load(open("playground/all_ans.json"))
+        self.all_ans = json.load(open("/tmp/nlp/all_ans.json"))
         if dsets is not None:
             dsets = set(dsets)
             # If the answer is used in the dsets
@@ -137,53 +170,69 @@ def load_obj_tsv(fname, topk=300):
     return data
 
 
-processes = []
-to_unzip = []
-# Download data
-print("download data")
-for k, url in tqdm(_DL_URLS.items()):
+if not os.path.exists("/tmp/nlp/"):
+    os.mkdir("/tmp/nlp/")
+for url in urls:
     ftype = url.split("/")[-1]
-    fname = "playground/" + ftype
-    if fname[-3:] == "zip":
-        to_unzip.append(fname)
-    if os.path.isfile(fname) or fname[:-3] not in os.listdirs("playground/"):
+    fname = "/tmp/nlp/" + ftype
+    check = fname.split(".")[0]
+    if os.path.exists(fname) or os.path.exists(check):
         continue
     else:
         os.mknod(fname)
+        print(f'downloading:{fname}')
 
     command = f'wget --no-check-certificate {url} -O {fname}'
-
-    processes.append(
-        subprocess.run(
-            command,
-            shell=True,
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-        )
+    subprocess.run(
+        command,
+        shell=True,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
     )
 
-assert all(list(map(lambda x: isinstance(x, subprocess.CompletedProcess), processes)))
-
-# unzip data
-total_time = 0
-for fname in to_unzip:
-    command = f"unzip  {fname} -D {fname[:-3]} && rm {fname}"
+for fname in filter(lambda x: x[-3:] == "zip", os.listdir("/tmp/nlp/")):
+    print("unzipping and removing archives...")
+    command = f"unzip /tmp/nlp/{fname} -d /tmp/nlp/{fname[:-4]}"
     process = subprocess.run(
         command,
         shell=True,
         stderr=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
     )
-    while not isinstance(process, subprocess.CompletedProcess):
-        time.sleep(1)
-        total_time += 1
-        print(f"unzipping, time: {total_time} s", end="\r", flush=True)
 
-with open("playground/minival.json", "r") as f:
-    items = json.load(f)
-images = load_obj_tsv("playground/mscoco_imgfeat/val2014_obj36.tsv")
+    # remove zip
+    command = f"rm /tmp/nlp/{fname}"
+    process = subprocess.run(
+        command,
+        shell=True,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+    )
+
+
+if DOWNLOAD_MINI:
+    split = "mini"
+    with open("/tmp/nlp/minival.json", "r") as f:
+        items = json.load(f)
+    images = load_obj_tsv("/tmp/nlp/val2014_obj36/mscoco_imgfeat/val2014_obj36.tsv", topk=300)
+elif DOWNLOAD_TRAIN:
+    split = "train"
+    with open("/tmp/nlp/mscoco_train.json", "r") as f:
+        items = json.load(f)
+    with open("/tmp/nlp/vgnococo.json", "r") as f:
+        items += json.load(f)
+    images = load_obj_tsv("/tmp/nlp/train2014_obj36/mscoco_imgfeat/train2014_obj36.tsv", topk=None)
+    images = load_obj_tsv("/tmp/nlp/vg_gqa_obj36/vg_gqa_imgfeat/vg_gqa_obj36.tsv", topk=None)
+elif DOWNLOAD_VAL:
+    split = "val"
+    with open("/tmp/nlp/mscoco_nominival.json", "r") as f:
+        items = json.load(f)
+    print("hi")
+    images = load_obj_tsv("/tmp/nlp/val2014_obj36/mscoco_imgfeat/val2014_obj36.tsv", topk=None)
+    print("hello")
+
+
 answer_table = AnswerTable()
-
 # pre-pre process
 new = {}
 raw_labels = []
@@ -254,31 +303,35 @@ my_features = {
     "questions": nlp.features.Sequence(nlp.Value("string")),
 }
 
+my_examples = []
+for i in range(len(new)):
 
-ex = {
-    "image": new[0]["features"].astype("float32"),
-    "img_id": str(new[0]["img_id"]),
-    "boxes": new[0]["boxes"],
-    "img_h": new[0]["img_h"],
-    "img_w": new[0]["img_w"],
-    "labels": new[0]["label"],
-    "labels_confidence": new[0]["label_conf"],
-    "num_boxes": new[0]["num_boxes"],
-    "attrs_id": new[0]["attrs_id"],
-    "objs_id": new[0]["objects_id"],
-    "attrs_confidence": new[0]["attrs_conf"],
-    "objs_confidence": new[0]["objects_conf"],
-    "captions": new[0]["sent"],
-    "questions": new[0]["question"],
-}
+    ex = {
+        "image": new[i]["features"].astype("float32"),
+        "img_id": new[i]["img_id"],
+        "boxes": new[i]["boxes"],
+        "img_h": new[i]["img_h"],
+        "img_w": new[i]["img_w"],
+        "labels": new[i]["label"],
+        "labels_confidence": new[i]["label_conf"],
+        "num_boxes": new[i]["num_boxes"],
+        "attrs_id": new[i]["attrs_id"],
+        "objs_id": new[i]["objects_id"],
+        "attrs_confidence": new[i]["attrs_conf"],
+        "objs_confidence": new[i]["objects_conf"],
+        "captions": new[i]["sent"],
+        "questions": new[i]["question"],
+    }
+
+    t = (i, ex)
+    my_examples.append(t)
 
 
 my_features = nlp.Features(my_features)
-writer = ArrowWriter(data_type=my_features.type, path="/tmp/beta.arrow")
-my_examples = [(0, ex), ]
+writer = ArrowWriter(data_type=my_features.type, path=f"/tmp/nlp/{split}.arrow")
 for key, record in my_examples:
     example = my_features.encode_example(record)
     writer.write(example)
 num_examples, num_bytes = writer.finalize()
-dataset = nlp.Dataset.from_file("/tmp/beta.arrow")
-print(dataset)
+dataset = nlp.Dataset.from_file(f"/tmp/nlp/{split}.arrow")
+print(dataset.num_rows)

@@ -14,14 +14,8 @@
 # limitations under the License.
 
 # Lint as: python3
-# """
-# TODO: first convert dataset to arrow format
-# """
-#
-# """LXMERT multimodal pretraining dataset beta"""
+
 from __future__ import absolute_import, division, print_function
-import hashlib
-import logging
 import nlp
 
 _DESCRIPTION = """\
@@ -37,102 +31,55 @@ _CITATION = """\
 }
 """
 
-_DL_URLS = {
-    "mscoco_train_imgs": "https://nlp1.cs.unc.edu/data/lxmert_data/mscoco_imgfeat/train2014_obj36.zip",
-    "mscoco_val_imgs": "https://nlp1.cs.unc.edu/data/lxmert_data/mscoco_imgfeat/val2014_obj36.zip",
-    "vg_trainval_imgs": "https://nlp1.cs.unc.edu/data/lxmert_data/vg_gqa_imgfeat/vg_gqa_obj36.zip",
-    "vg_testdev_imgs": "https://nlp1.cs.unc.edu/data/lxmert_data/vg_gqa_imgfeat/gqa_testdev_obj36.zip",
-    "mscoco_train_txt": "https://nlp1.cs.unc.edu/data/lxmert_data/lxmert/mscoco_train.json",
-    "mscoco_val_txt": "https://nlp1.cs.unc.edu/data/lxmert_data/lxmert/mscoco_nominival.json",
-    "vg_trainval_txt": "https://nlp1.cs.unc.edu/data/lxmert_data/lxmert/vgnococo.json",
-    "mscoco_minival_txt": "https://nlp1.cs.unc.edu/data/lxmert_data/lxmert/mscoco_minival.json",
-    "ans": "https://raw.githubusercontent.com/airsplay/lxmert/master/data/lxmert/all_ans.json",
-}
+_URL = "https://arxiv.org/abs/1908.07490"
 
+_ARROW_URL_PATH_TRAIN = None
+_ARROW_URL_PATH_VAL = None
 
-_DEFAULT_VERSION = nlp.Version("0.0.1", "beta test for multi-modal.")
+_LXMERT_FEATURES = nlp.Features({
+    "image": nlp.features.Array2D(dtype="float32"),
+    "img_id": nlp.Value("string"),
+    "boxes": nlp.features.Array2D(dtype="int32"),
+    "img_h": nlp.Value("int32"),
+    "img_w": nlp.Value("int32"),
+    "labels": nlp.features.Array2D(dtype="int32"),
+    "labels_confidence": nlp.features.Array2D(dtype="float32"),
+    "num_boxes": nlp.Value("int32"),
+    "attrs_id": nlp.features.Sequence(nlp.ClassLabel(num_classes=400)),
+    "objs_id": nlp.features.Sequence(nlp.ClassLabel(num_classes=1600)),
+    "attrs_confidence": nlp.features.Sequence(nlp.Value("float32")),
+    "objs_confidence": nlp.features.Sequence(nlp.Value("float32")),
+    "captions": nlp.features.Sequence(nlp.Value("string")),
+    "questions": nlp.features.Sequence(nlp.Value("string")),
+})
 
-
-class LxmertPretrainingBetaConfig(nlp.BuilderConfig):
-    """BuilderConfig for LXMERT Pretraining Beta"""
-
-    def __init__(self, **kwargs):
-        """
-        Args: **kwargs: keyword arguments forwarded to super.
-        """
-        super(LxmertPretrainingBetaConfig, self).__init__(**kwargs)
-
-
-def _get_url_hashes(path):
-    """Get hashes of urls in file."""
-    urls = _read_text_file(path)
-
-    def url_hash(u):
-        h = hashlib.sha1()
-        try:
-            u = u.encode("utf-8")
-        except UnicodeDecodeError:
-            logging.error("Cannot hash url: %s", u)
-        h.update(u)
-        return h.hexdigest()
-
-    return {url_hash(u): True for u in urls}
-
-
-def _read_text_file(text_file):
-    lines = []
-    with open(text_file, "r") as f:
-        for line in f:
-            lines.append(line.strip())
-    return lines
+_SUPERVISED_KEYS = tuple(_LXMERT_FEATURES.keys())
 
 
 class LxmertPretrainingBeta(nlp.GeneratorBasedBuilder):
     """CNN/DailyMail non-anonymized summarization dataset."""
 
-    BUILDER_CONFIGS = [
-        LxmertPretrainingBetaConfig(
-            name="lxmert-full-pretrain",
-            description="GQA, VQA, MSCOCO, VG train + val data",
-            version=_DEFAULT_VERSION)
-    ]
-
     def _info(self):
-        # TODO
-        pass
-
-    """
-    def _vocab_text_gen(self, paths):
-        for _, ex in self._generate_examples(paths):
-            yield " ".join([ex[_ARTICLE], ex[_HIGHLIGHTS]])
+        return nlp.DatasetInfo(
+            description=_DESCRIPTION,
+            features=_LXMERT_FEATURES,
+            homepage=_URL,
+            citation=_CITATION,
+            supervised_keys=_SUPERVISED_KEYS
+        )
 
     def _split_generators(self, dl_manager):
-        dl_paths = dl_manager.download_and_extract(_DL_URLS)
-        train_files = _subset_filenames(dl_paths, nlp.Split.TRAIN)
-        # Generate shared vocabulary
+
+        arrow_train = dl_manager.download_and_extract(_ARROW_URL_PATH_TRAIN)
+        arrow_val = dl_manager.download_and_extract(_ARROW_URL_PATH_VAL)
 
         return [
-            nlp.SplitGenerator(name=nlp.Split.TRAIN, gen_kwargs={"files": train_files}),
-            nlp.SplitGenerator(
-                name=nlp.Split.VALIDATION, gen_kwargs={"files": _subset_filenames(dl_paths, nlp.Split.VALIDATION)}
-            ),
-            nlp.SplitGenerator(name=nlp.Split.TEST, gen_kwargs={"files": _subset_filenames(dl_paths, nlp.Split.TEST)}),
+            nlp.SplitGenerator(name=nlp.Split.TRAIN, gen_kwargs={"filepath": arrow_train}),
+            nlp.SplitGenerator(name=nlp.Split.VAL, gen_kwargs={"filepath": arrow_val}),
+            # nlp.SplitGenerator(, gen_kwargs={"files" _subset_file()"),
         ]
 
-    def _generate_examples(self, files):
-        for p in files:
-            article, highlights = _get_art_abs(p, self.config.version)
-            if not article or not highlights:
-                continue
-            fname = os.path.basename(p)
-            yield fname, {_ARTICLE: article, _HIGHLIGHTS: highlights}
-    """
-
-
-if __name__ == "__main__":
-    dataset = LxmertPretrainingBeta(name="3.0.0", splits=["train"])
-    print([d for d in dir(dataset) if "__" not in d and d[0] != "_"])
-    print(dataset.config)
-    print(dataset.builder_configs)
-    print(dataset.manual_download_instructions)
-    print(dataset.info)
+    def _generate_examples(self, filepath):
+        dataset = nlp.Dataset.from_file(filepath)
+        for i in range(dataset.num_rows):
+            yield {key: dataset[key] for key in _SUPERVISED_KEYS}

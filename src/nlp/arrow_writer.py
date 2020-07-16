@@ -19,6 +19,7 @@ import os
 import socket
 from typing import Any, Dict, List, Optional
 import pyarrow as pa
+import numpy as np
 
 from .utils.file_utils import HF_DATASETS_CACHE, hash_url_to_filename
 from .utils.py_utils import map_all_sequences_to_lists
@@ -129,9 +130,10 @@ class ArrowWriter(object):
             entries = pa.concat_tables(entries)
             # selecing the first row and column "image" and casting to numpy"
             # we can implement mehtods for "to torch or others "
-            # print(entries.slice(0,1).column("image").chunk(0).to_numpy())
+            # list(entries.slice(0, 1).column("image").chunk(0))
             for b in entries.to_batches():
                 self.pa_writer.write_batch(b)
+
         if self.current_rows and not ext_cols:
             pa_array = pa.array(self.current_rows, type=self._type)
             first_example = pa.array(self.current_rows[0:1], type=self._type)[0]
