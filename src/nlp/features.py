@@ -17,10 +17,12 @@
 """ This class handle features definition in datasets and some utilities to display table type."""
 import logging
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
 
-import numpy
+import numpy as np
 import pyarrow as pa
+from pandas.api.extensions import ExtensionArray as PandasExtensionArray
+from pandas.api.extensions import ExtensionDtype as PandasExtensionDtype
 
 from . import utils
 
@@ -97,7 +99,6 @@ class Tensor:
 
 
 # 2D main class and helper classes
-@dataclass
 class Array2D(pa.PyExtensionType):
 
     dims: int = 2
@@ -137,8 +138,8 @@ class Array2D(pa.PyExtensionType):
         return ExtensionArray2D._get_class().__name__
 
     def encode_example(self, value):
-        if isinstance(value, numpy.ndarray):
-            value = value[numpy.newaxis, ...]
+        if isinstance(value, np.ndarray):
+            value = value[np.newaxis, ...]
             value = value.tolist()
         elif isinstance(value, list):
             value = [value]
@@ -184,8 +185,121 @@ class ExtensionArray2D(pa.ExtensionArray):
 
     def to_numpy(self):
         numpy_arr = Array2D._generate_flatten(self.storage, self.dims)
-        numpy_arr = numpy_arr.reshape(ExtensionArray2D._construct_shape(self.storage))
+        numpy_arr = numpy_arr.reshape(len(self), *ExtensionArray2D._construct_shape(self.storage))
         return numpy_arr
+
+    def to_pylist(self):
+        return self.to_numpy().tolist()
+
+
+class PandasArrayDtype(PandasExtensionDtype):
+    _metadata = "subtype"
+
+    def __init__(self, subtype: Union["PandasArrayDtype", np.dtype]):
+        self._subtype = subtype
+
+    def __from_arrow__(self, array):
+        if isinstance(array, pa.ChunkedArray):
+            numpy_arr = np.vstack([chunk.to_numpy() for chunk in array.chunks])
+        else:
+            numpy_arr = array.to_numpy()
+        return PandasVectorArray(numpy_arr)
+
+    @classmethod
+    def construct_array_type(cls):
+        return PandasVectorArray
+
+    @property
+    def type(self) -> type:
+        return np.ndarray
+
+    @property
+    def kind(self) -> str:
+        return "O"
+
+    @property
+    def name(self) -> str:
+        return f"array[{self.subtype}]"
+
+    @property
+    def subtype(self) -> np.dtype:
+        return self._subtype
+
+
+class PandasVectorArray(PandasExtensionArray):
+    def __init__(self, data: np.ndarray, copy: bool = False):
+        self._data = data if not copy else np.array(data)
+        self._dtype = PandasArrayDtype(data.dtype)
+
+    def copy(self, deep: bool = False) -> "PandasVectorArray":
+        return PandasVectorArray(self._data, copy=True)
+
+    @classmethod
+    def _from_sequence(
+        cls, scalars, dtype: Optional[PandasArrayDtype] = None, copy: bool = False
+    ) -> "PandasVectorArray":
+        data = np.array(scalars, dtype=dtype if dtype is None else dtype.subtype, copy=copy)
+        return PandasVectorArray(data, dtype=dtype, copy=copy)
+
+    @classmethod
+    def _concat_same_type(cls, to_concat: Sequence["PandasVectorArray"]) -> "PandasVectorArray":
+        data = np.vstack([va._data for va in to_concat])
+        return cls(data, copy=False)
+
+    @property
+    def dtype(self) -> PandasArrayDtype:
+        return self._dtype
+
+    @property
+    def nbytes(self) -> int:
+        return self._data.nbytes
+
+    def isna(self) -> np.ndarray:
+        if np.issubdtype(self.dtype.subtype, np.floating):
+            return np.array(np.isnan(arr).any() for arr in self._data)
+        return np.array((arr < 0).any() for arr in self._data)
+
+    def __setitem__(self, key: Union[int, slice, np.ndarray], value: Any) -> None:
+        raise NotImplementedError()
+
+    def __getitem__(self, item: Union[int, slice, np.ndarray]) -> Union[np.ndarray, "PandasVectorArray"]:
+        if isinstance(item, int):
+            return self._data[item]
+        return PandasVectorArray(self._data[item, :], copy=False)
+
+    def take(self, indices: Sequence[int], allow_fill: bool = False, fill_value: bool = None) -> "PandasVectorArray":
+        indices = np.asarray(indices, dtype="int")
+        if allow_fill:
+            fill_value = (
+                self.dtype.na_value if fill_value is None else np.asarray(fill_value, dtype=self.dtype.subtype)
+            )
+            mask = indices == -1
+            if (indices < -1).any():
+                raise ValueError("Invalid value in `indices`, must be all >= -1 for `allow_fill` is True")
+            elif len(self) > 0:
+                pass
+            elif not np.all(mask):
+                raise IndexError("Invalid take for empty PandasVectorArray, must be all -1.")
+            else:
+                data = np.array([fill_value] * len(indices), dtype=self.dtype.subtype)
+                return PandasVectorArray(data, copy=False)
+        took = self._data.take(indices, axis=0)
+        if allow_fill and mask.any():
+            took[mask] = [fill_value] * np.sum(mask)
+        return PandasVectorArray(took, copy=False)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __eq__(self, other) -> np.ndarray:
+        if not isinstance(other, PandasVectorArray):
+            raise NotImplementedError("Invalid type to compare to: {}".format(type(other)))
+        return (self._data == other._data).all()
+
+
+def pandas_types_mapper(dtype):
+    if isinstance(dtype, Array2D):
+        return PandasArrayDtype(dtype.inner_type)
 
 
 @dataclass
