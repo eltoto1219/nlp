@@ -1,3 +1,6 @@
+import os
+import tempfile
+
 import numpy as np
 
 import nlp
@@ -24,17 +27,19 @@ dict_example_1 = {
     "source": "baz",
 }
 
-my_features = nlp.Features(my_features)
-writer = ArrowWriter(data_type=my_features.type, path="/tmp/beta.arrow")
-my_examples = [(0, dict_example_0), (1, dict_example_1)]
-for key, record in my_examples:
-    example = my_features.encode_example(record)
-    writer.write(example)
-num_examples, num_bytes = writer.finalize()
-dataset = nlp.Dataset.from_file("/tmp/arrow_data.arrow")
 
-print(dataset)
-# throws an error
-# print(dataset[0])
-# this works
-# print(np.vstack(dataset["image"][0].tolist()).shape)
+with tempfile.TemporaryDirectory() as tmp_dir:
+
+    my_features = nlp.Features(my_features)
+    writer = ArrowWriter(data_type=my_features.type, path=os.path.join(tmp_dir, "beta.arrow"))
+    my_examples = [(0, dict_example_0), (1, dict_example_1)]
+    for key, record in my_examples:
+        example = my_features.encode_example(record)
+        writer.write(example)
+    num_examples, num_bytes = writer.finalize()
+    dataset = nlp.Dataset.from_file(os.path.join(tmp_dir, "beta.arrow"))
+
+    print(dataset)
+    print(dataset[0]["text"].shape)
+    dataset.set_format("numpy")  # set format to stack examples
+    print(dataset[:2]["text"].shape)
