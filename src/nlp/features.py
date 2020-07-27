@@ -208,11 +208,11 @@ class PandasArrayDtype(PandasExtensionDtype):
             numpy_arr = np.vstack([chunk.to_numpy() for chunk in array.chunks])
         else:
             numpy_arr = array.to_numpy()
-        return PandasVectorArray(numpy_arr)
+        return PandasExtensionArray(numpy_arr)
 
     @classmethod
     def construct_array_type(cls):
-        return PandasVectorArray
+        return PandasExtensionArray
 
     @property
     def type(self) -> type:
@@ -231,23 +231,23 @@ class PandasArrayDtype(PandasExtensionDtype):
         return self._subtype
 
 
-class PandasVectorArray(PandasExtensionArray):
+class PandasExtensionArray(PandasExtensionArray):
     def __init__(self, data: np.ndarray, copy: bool = False):
         self._data = data if not copy else np.array(data)
         self._dtype = PandasArrayDtype(data.dtype)
 
-    def copy(self, deep: bool = False) -> "PandasVectorArray":
-        return PandasVectorArray(self._data, copy=True)
+    def copy(self, deep: bool = False) -> "PandasExtensionArray":
+        return PandasExtensionArray(self._data, copy=True)
 
     @classmethod
     def _from_sequence(
         cls, scalars, dtype: Optional[PandasArrayDtype] = None, copy: bool = False
-    ) -> "PandasVectorArray":
+    ) -> "PandasExtensionArray":
         data = np.array(scalars, dtype=dtype if dtype is None else dtype.subtype, copy=copy)
-        return PandasVectorArray(data, dtype=dtype, copy=copy)
+        return PandasExtensionArray(data, dtype=dtype, copy=copy)
 
     @classmethod
-    def _concat_same_type(cls, to_concat: Sequence["PandasVectorArray"]) -> "PandasVectorArray":
+    def _concat_same_type(cls, to_concat: Sequence["PandasExtensionArray"]) -> "PandasExtensionArray":
         data = np.vstack([va._data for va in to_concat])
         return cls(data, copy=False)
 
@@ -267,12 +267,12 @@ class PandasVectorArray(PandasExtensionArray):
     def __setitem__(self, key: Union[int, slice, np.ndarray], value: Any) -> None:
         raise NotImplementedError()
 
-    def __getitem__(self, item: Union[int, slice, np.ndarray]) -> Union[np.ndarray, "PandasVectorArray"]:
+    def __getitem__(self, item: Union[int, slice, np.ndarray]) -> Union[np.ndarray, "PandasExtensionArray"]:
         if isinstance(item, int):
             return self._data[item]
-        return PandasVectorArray(self._data[item, :], copy=False)
+        return PandasExtensionArray(self._data[item, :], copy=False)
 
-    def take(self, indices: Sequence[int], allow_fill: bool = False, fill_value: bool = None) -> "PandasVectorArray":
+    def take(self, indices: Sequence[int], allow_fill: bool = False, fill_value: bool = None) -> "PandasExtensionArray":
         indices = np.asarray(indices, dtype="int")
         if allow_fill:
             fill_value = (
@@ -284,20 +284,20 @@ class PandasVectorArray(PandasExtensionArray):
             elif len(self) > 0:
                 pass
             elif not np.all(mask):
-                raise IndexError("Invalid take for empty PandasVectorArray, must be all -1.")
+                raise IndexError("Invalid take for empty PandasExtensionArray, must be all -1.")
             else:
                 data = np.array([fill_value] * len(indices), dtype=self.dtype.subtype)
-                return PandasVectorArray(data, copy=False)
+                return PandasExtensionArray(data, copy=False)
         took = self._data.take(indices, axis=0)
         if allow_fill and mask.any():
             took[mask] = [fill_value] * np.sum(mask)
-        return PandasVectorArray(took, copy=False)
+        return PandasExtensionArray(took, copy=False)
 
     def __len__(self) -> int:
         return len(self._data)
 
     def __eq__(self, other) -> np.ndarray:
-        if not isinstance(other, PandasVectorArray):
+        if not isinstance(other, PandasExtensionArray):
             raise NotImplementedError("Invalid type to compare to: {}".format(type(other)))
         return (self._data == other._data).all()
 
