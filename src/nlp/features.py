@@ -272,7 +272,9 @@ class PandasExtensionArray(PandasExtensionArray):
             return self._data[item]
         return PandasExtensionArray(self._data[item, :], copy=False)
 
-    def take(self, indices: Sequence[int], allow_fill: bool = False, fill_value: bool = None) -> "PandasExtensionArray":
+    def take(
+        self, indices: Sequence[int], allow_fill: bool = False, fill_value: bool = None
+    ) -> "PandasExtensionArray":
         indices = np.asarray(indices, dtype="int")
         if allow_fill:
             fill_value = (
