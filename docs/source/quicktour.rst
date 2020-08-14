@@ -54,7 +54,7 @@ If you want to create a :class:`nlp.Dataset` from local CSV, JSON, text or panda
 
 .. note::
 
-    If you don't provide a :obj:`split` argument to :func:`nlp.load_dataset`, this method will return a dictionnary containing a datasets for each split in the dataset.
+    If you don't provide a :obj:`split` argument to :func:`nlp.load_dataset`, this method will return a dictionary containing a datasets for each split in the dataset. This dictionary is a :obj:`nlp.DatasetDict` object that lets you process all the splits at once using :func:`nlp.DatasetDict.map`, :func:`nlp.DatasetDict.filter`, etc.
 
 Now let's have a look at our newly created :class:`nlp.Dataset` object. It basically behaves like a normal python container. You can query its length, get a single row but also get multiple rows and even index along columns (see all the details in :doc:`exploring </exploring>`):
 
@@ -186,7 +186,7 @@ The first modification is just a matter of renaming the column as follow (we cou
 
     >>> dataset = dataset.map(lambda examples: {'labels': examples['label']}, batched=True)
 
-The two toehr modifications can be handled by the :func:`nlp.Dataset.set_format` method which will convert, on the fly, the returned output from :func:`nlp.Dataset.__getitem__` to filter the unwanted columns and convert python objects in PyTorch tensors.
+The two other modifications can be handled by the :func:`nlp.Dataset.set_format` method which will convert, on the fly, the returned output from :func:`nlp.Dataset.__getitem__` to filter the unwanted columns and convert python objects in PyTorch tensors.
 
 Here is how we can apply the right format to our dataset using :func:`nlp.Dataset.set_format` and wrap it in a ``torch.utils.data.DataLoader``:
 

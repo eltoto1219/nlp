@@ -6,7 +6,7 @@ Main classes
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: nlp.DatasetInfo
-    :members: 
+    :members:
 
 ``Dataset``
 ~~~~~~~~~~~~~~~~~~~~~
@@ -18,13 +18,25 @@ The base class :class:`nlp.Dataset` implements a Dataset backed by an Apache Arr
         drop, unique, dictionary_encode_column, flatten,
         __len__, __iter__, formated_as, set_format, reset_format,
         __getitem__, cleanup_cache_files,
-        map, filter, select, sort, shuffle, train_test_split, shard,
+        cast_, remove_column_, rename_column_,
+        map, filter, select, sort, shuffle, train_test_split, shard, export,
         add_faiss_index, add_faiss_index_from_external_arrays, save_faiss_index, load_faiss_index,
         add_elasticsearch_index,
         list_indexes, get_index, drop_index, search, search_batch, get_nearest_examples, get_nearest_examples_batch,
         info, split, builder_name, citation, config_name, dataset_size,
         description, download_checksums, download_size, features, homepage,
         license, size_in_bytes, supervised_keys, version
+
+
+``DatasetDict``
+~~~~~~~~~~~~~~~~~~~~~
+
+Dictionary with split names as keys ('train', 'test' for example), and :obj:`nlp.Dataset` objects as values.
+It also has dataset transform methods like map or filter, to process all the splits at once.
+
+.. autoclass:: nlp.DatasetDict
+    :members: map, filter, sort, shuffle, set_format, reset_format, formated_as, cast_, remove_column_, rename_column_
+
 
 ``Features``
 ~~~~~~~~~~~~~~~~~~~~~
@@ -55,7 +67,7 @@ The base class :class:`nlp.Dataset` implements a Dataset backed by an Apache Arr
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: nlp.MetricInfo
-    :members: 
+    :members:
 
 ``Metric``
 ~~~~~~~~~~~~~~~~~~~~~
