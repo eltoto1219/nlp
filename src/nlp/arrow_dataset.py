@@ -666,7 +666,9 @@ class Dataset(DatasetInfoMixin, IndexableMixin):
                 if format_type == "pandas":
                     outputs = self._data.slice(key, 1).to_pandas(types_mapper=pandas_types_mapper)
                 else:
-                    outputs = self._unnest(self._data.slice(key, 1).to_pandas(types_mapper=pandas_types_mapper).to_dict("list"))
+                    outputs = self._unnest(
+                        self._data.slice(key, 1).to_pandas(types_mapper=pandas_types_mapper).to_dict("list")
+                    )
             else:
                 outputs = self._unnest(self._data.slice(key, 1).to_pydict())
         elif isinstance(key, slice):

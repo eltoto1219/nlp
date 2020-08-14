@@ -135,27 +135,24 @@ class ArrowWriter(object):
     def write_on_file(self):
         """ Write stored examples
         """
+        if not self.current_rows:
+            return
         ext_cols = set(x.name for x in self._type if isinstance(x.type, pa.PyExtensionType))
         type = None if self.update_features and self.pa_writer is None else self._type
-        if ext_cols and self.current_rows:
+        if ext_cols:
             entries = []
             for row in self.current_rows:
                 row_list = [
-                    pa.array([row[f.name]], self._type[f.name].type)
-                    if f.name not in ext_cols else row[f.name]
+                    pa.array([row[f.name]], type[f.name].type) if f.name not in ext_cols else row[f.name]
                     for f in self.schema
                 ]
-                row = pa.RecordBatch.from_arrays(row_list, schema=self.schema)
+                row = pa.RecordBatch.from_arrays(row_list, schema=self._schema)
                 row = pa.Table.from_batches([row])
                 entries.append(row)
-            entries = pa.concat_tables(entries)
-            self._num_bytes += entries.nbytes
-            # convert entry to list, ex. below:
-            # list(entries.slice(0, 1).column("image").chunk(0))
-            for b in entries.to_batches(self.writer_batch_size):
-                self.pa_writer.write_batch(b)
+            table = pa.concat_tables(entries)
+            self.write_table(table)
 
-        if self.current_rows and not ext_cols:
+        else:
             pa_array = pa.array(self.current_rows, type=type)
             inferred_type = pa_array.type
             first_example = pa.array(self.current_rows[0:1], type=inferred_type)[0]
