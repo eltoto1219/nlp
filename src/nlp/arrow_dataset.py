@@ -37,8 +37,8 @@ from tqdm.auto import tqdm
 from nlp.utils.py_utils import dumps
 
 from .arrow_writer import ArrowWriter
-from .info import DatasetInfo
 from .features import Features, pandas_types_mapper
+from .info import DatasetInfo
 from .search import IndexableMixin
 from .splits import NamedSplit
 from .utils import map_nested
@@ -662,26 +662,32 @@ class Dataset(DatasetInfoMixin, IndexableMixin):
                 key = self._data.num_rows + key
             if key >= self._data.num_rows:
                 raise IndexError(f"Index ({key}) outside of table length ({self._data.num_rows}).")
-            if format_type is not None and format_type == "pandas":
-                outputs = self._data.slice(key, 1).to_pandas(types_mapper=pandas_types_mapper)
+            if format_type is not None:
+                if format_type == "pandas":
+                    outputs = self._data.slice(key, 1).to_pandas(types_mapper=pandas_types_mapper)
+                else:
+                    outputs = self._unnest(
+                        self._data.slice(key, 1).to_pandas(types_mapper=pandas_types_mapper).to_dict("list")
+                    )
             else:
-                outputs = self._unnest(
-                    self._data.slice(key, 1).to_pandas(types_mapper=pandas_types_mapper).to_dict("list")
-                )
+                outputs = self._unnest(self._data.slice(key, 1).to_pydict())
         elif isinstance(key, slice):
             key_indices = key.indices(self._data.num_rows)
             if key_indices[2] != 1 or key_indices[1] < key_indices[0]:
                 raise ValueError("Slicing can only take contiguous and ordered slices.")
-            if format_type is not None and format_type == "pandas":
-                outputs = self._data.slice(key_indices[0], key_indices[1] - key_indices[0]).to_pandas(
-                    types_mapper=pandas_types_mapper
-                )
+            if format_type is not None:
+                if format_type == "pandas":
+                    outputs = self._data.slice(key_indices[0], key_indices[1] - key_indices[0]).to_pandas(
+                        types_mapper=pandas_types_mapper
+                    )
+                else:
+                    outputs = (
+                        self._data.slice(key_indices[0], key_indices[1] - key_indices[0])
+                        .to_pandas(types_mapper=pandas_types_mapper)
+                        .to_dict("list")
+                    )
             else:
-                outputs = (
-                    self._data.slice(key_indices[0], key_indices[1] - key_indices[0])
-                    .to_pandas(types_mapper=pandas_types_mapper)
-                    .to_dict("list")
-                )
+                outputs = self._data.slice(key_indices[0], key_indices[1] - key_indices[0]).to_pydict()
         elif isinstance(key, str):
             if key not in self._data.column_names:
                 raise ValueError(f"Column ({key}) not in table columns ({self._data.column_names}).")
@@ -689,20 +695,22 @@ class Dataset(DatasetInfoMixin, IndexableMixin):
                 if format_columns is None or key in format_columns:
                     if format_type == "pandas":
                         outputs = self._data[key].to_pandas(types_mapper=pandas_types_mapper)
-                    elif format_type in ("numpy", "torch", "tensorflow"):
-                        outputs = self._data.to_pandas(types_mapper=pandas_types_mapper).to_dict("list")[key]
                     else:
-                        outputs = self._data[key].to_pandas(types_mapper=pandas_types_mapper).to_list()
+                        outputs = self._data.to_pandas(types_mapper=pandas_types_mapper).to_dict("list")[key]
                 else:
-                    outputs = self._data[key].to_pandas(types_mapper=pandas_types_mapper).to_list()
+                    outputs = self._data.to_pandas(types_mapper=pandas_types_mapper).to_dict("list")[key]
             else:
-                outputs = self._data[key].to_pandas(types_mapper=pandas_types_mapper).to_list()
+                outputs = self._data[key].to_pylist()
         elif isinstance(key, Iterable):
             data_subset = pa.concat_tables(self._data.slice(int(i), 1) for i in key)
-            if format_type is not None and format_type == "pandas":
-                outputs = data_subset.to_pandas(types_mapper=pandas_types_mapper)
+            if format_type is not None:
+                if format_type == "pandas":
+                    outputs = data_subset.to_pandas(types_mapper=pandas_types_mapper)
+                else:
+                    outputs = data_subset.to_pandas(types_mapper=pandas_types_mapper).to_dict("list")
             else:
-                outputs = data_subset.to_pandas(types_mapper=pandas_types_mapper).to_dict("list")
+                outputs = data_subset.to_pydict()
+
         else:
             raise ValueError("Can only get row(s) (int or slice or list[int]) or columns (string).")
 
