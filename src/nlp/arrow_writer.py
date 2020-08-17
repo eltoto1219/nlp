@@ -20,6 +20,7 @@ import os
 import socket
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional
+
 import pyarrow as pa
 from tqdm.auto import tqdm
 
@@ -129,11 +130,6 @@ class ArrowWriter(object):
             pa_table = pa.Table.from_batches([pa_batch])
             self._build_writer(inferred_schema=pa_table.schema)
         self.pa_writer.write_batch(pa_batch)
-
-    def _sort_fields(self, datatype):
-        sorted_fields = sorted(datatype, key=lambda x: x.name)
-        sorted_names = [x.name for x in sorted_fields]
-        return sorted_names, sorted_fields
 
     def write_on_file(self):
         """ Write stored examples
